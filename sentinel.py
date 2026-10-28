@@ -77,8 +77,23 @@ def _normalize(kind: str, value: str) -> str:
 
 
 def load_pack(pack_path: Path) -> tuple[dict, dict]:
-    """Accept only our explicitly narrow JSON schema, not executable rules."""
-    pack = _read_json(pack_path, MAX_PACK_BYTES)
+    """Load a single bounded snapshot; do not re-open the pack for its digest."""
+    path = Path(pack_path)
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("Pack must be a regular non-symlink file")
+    with path.open("rb") as handle:
+        raw = handle.read(MAX_PACK_BYTES + 1)
+    return load_pack_bytes(raw)
+
+
+def load_pack_bytes(raw: bytes) -> tuple[dict, dict]:
+    """Validate exact in-memory bytes so authenticated and parsed data coincide."""
+    if not isinstance(raw, bytes) or len(raw) > MAX_PACK_BYTES:
+        raise ValueError("Pack exceeds size limit")
+    try:
+        pack = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeError, RecursionError) as exc:
+        raise ValueError("Invalid UTF-8 JSON indicator pack") from exc
     if not isinstance(pack, dict) or pack.get("schema") != "fieldshield.ioc-pack.v1":
         raise ValueError("Unsupported indicator pack schema")
     source = pack.get("source")
@@ -113,7 +128,7 @@ def load_pack(pack_path: Path) -> tuple[dict, dict]:
         normalized = _normalize(kind, value)
         ids.add(identifier)
         lookup.setdefault((kind, normalized), []).append(entry)
-    metadata = {"pack_sha256": hashlib.sha256(pack_path.read_bytes()).hexdigest(),
+    metadata = {"pack_sha256": hashlib.sha256(raw).hexdigest(),
                 "source": source, "issued_at": issued, "indicators_loaded": len(ids)}
     return metadata, lookup
 
