@@ -73,3 +73,25 @@ changing their meaning. It never downloads sources or executes rules.
 [Read supported patterns, provenance, and limitations](docs/SENTINEL_STIX_V0.2.md).
 A converted pack is **not authenticated** and must not be treated as verified
 spyware intelligence without independent source review.
+
+### Φ Sentinel Verified Intelligence Packs (v0.3, optional)
+
+`sentinel_verified.py` adds **signature-required** offline scanning with
+Ed25519 and a **manually pinned** publisher trust store. It checks exact pack
+bytes and signed metadata, expiration, local revoked keys, blocked pack
+digests, and local minimum issuance date **before** invoking Sentinel.
+It never silently trusts a downloaded public key.
+
+The existing `sentinel.py` remains standard-library-only and can read
+unsigned packs; use the verified CLI when provenance must be mandatory.
+
+```bash
+python -m pip install -r requirements-verified.txt  # optional dependency
+python sentinel_verified.py verify --pack pack.json --signature pack.sig.json --trust trusted.json
+python sentinel_verified.py scan --pack pack.json --signature pack.sig.json --trust trusted.json observations observations.json
+```
+
+The example trust store, [`rules/sentinel-empty-trust.json`](rules/sentinel-empty-trust.json),
+has **zero trusted keys**, intentionally. Read the
+[verified-pack threat model and signing guide](docs/SENTINEL_VERIFIED_V0.3.md).
+Cryptographic authenticity does not prove malicious activity or clean devices.
