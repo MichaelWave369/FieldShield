@@ -58,3 +58,18 @@ python -m unittest discover -s tests -v
 See [Sentinel v0.1 design and limitations](docs/SENTINEL_V0.1.md).
 `NO_MATCHES_IN_SCOPE` is **not** a safe-device verdict, and a matched indicator
 does not alone prove compromise. No data uploads or automatic remediation.
+
+
+### Sentinel STIX Intelligence Bridge (v0.2, experimental)
+
+Import a **manually reviewed, local** STIX 2.1 indicator bundle into a
+Sentinel-compatible pack. The converter deliberately accepts only exact
+single-comparison patterns and refuses complex expressions rather than
+changing their meaning. It never downloads sources or executes rules.
+
+    python sentinel_stix.py ./reviewed.stix2 --source "Reviewed publication" --reference "https://example.org/research" --output reviewed-pack.json
+    python sentinel.py observations ./observations.json --iocs reviewed-pack.json
+
+[Read supported patterns, provenance, and limitations](docs/SENTINEL_STIX_V0.2.md).
+A converted pack is **not authenticated** and must not be treated as verified
+spyware intelligence without independent source review.
