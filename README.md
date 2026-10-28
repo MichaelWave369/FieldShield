@@ -41,3 +41,20 @@ FieldShield v0.1 does **not** sandbox or execute programs, unpack archives, conn
 **Governance:** explanations and appeal paths; no unsupported judgments about people's intentions; fail closed when scanning or authorization fails.
 
 > This is an experimental safety aid, not a malware detector or a guarantee against abuse.
+
+
+## Φ Sentinel: offline evidence matching (experimental)
+
+FieldShield also includes an independent, **opt-in** indicator-matching prototype
+in `sentinel.py`. It compares local file hashes and relative paths or normalized
+observations against a **user-supplied** JSON pack. The bundled rules are
+**synthetic examples only**, not real spyware intelligence.
+
+```bash
+python sentinel.py observations examples/synthetic-observations.json --iocs rules/sentinel-demo-iocs.json
+python -m unittest discover -s tests -v
+```
+
+See [Sentinel v0.1 design and limitations](docs/SENTINEL_V0.1.md).
+`NO_MATCHES_IN_SCOPE` is **not** a safe-device verdict, and a matched indicator
+does not alone prove compromise. No data uploads or automatic remediation.

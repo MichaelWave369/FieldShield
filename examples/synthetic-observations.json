@@ -1,0 +1,8 @@
+{
+  "schema": "fieldshield.observations.v1",
+  "observations": [
+    {"kind": "domain", "value": "spyware-demo.example.invalid"},
+    {"kind": "process", "value": "ordinary-synthetic-process"},
+    {"kind": "url", "value": "https://not-a-match.example.invalid/example"}
+  ]
+}

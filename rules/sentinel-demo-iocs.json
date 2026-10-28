@@ -1,0 +1,21 @@
+{
+  "schema": "fieldshield.ioc-pack.v1",
+  "source": "FieldShield synthetic test indicators ONLY; not real spyware intelligence",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "indicators": [
+    {
+      "id": "DEMO-DOMAIN-1",
+      "kind": "domain",
+      "value": "spyware-demo.example.invalid",
+      "confidence": "high",
+      "reference": "https://www.rfc-editor.org/rfc/rfc2606"
+    },
+    {
+      "id": "DEMO-PATH-1",
+      "kind": "path",
+      "value": "test-fixtures/synthetic-marker.txt",
+      "confidence": "low",
+      "reference": "https://www.rfc-editor.org/rfc/rfc2606"
+    }
+  ]
+}
