@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sentinel import load_pack, scan_observations
 from sentinel_stix import convert_bundle, main, read_bundle
@@ -45,6 +45,10 @@ class StixImporterTests(unittest.TestCase):
         self.assertEqual(pack["indicators"][0]["kind"], "domain")
         self.assertEqual(pack["indicators"][0]["confidence"], "high")
         self.assertEqual(pack["origin_stix"]["bundle_sha256"], DIGEST)
+        # The STIX conversion above uses a frozen future-capable clock. Make
+        # this separate loader integration fixture historically issued so its
+        # result never depends on the GitHub runner's wall-clock minute.
+        pack["issued_at"] = "2026-01-02T00:00:00+00:00"
         pack_path = self.root / "pack.json"
         pack_path.write_text(json.dumps(pack), encoding="utf-8")
         metadata, lookup = load_pack(pack_path)
@@ -56,6 +60,16 @@ class StixImporterTests(unittest.TestCase):
         report = scan_observations(obs_path, metadata, lookup)
         self.assertEqual(report["decision"], "INDICATORS_FOUND")
         self.assertEqual(report["findings"][0]["indicator_id"], ID_A)
+
+    def test_future_issued_pack_is_rejected_by_live_loader(self):
+        pack = convert(bundle(indicator("[domain-name:value = 'test.example.invalid']")))
+        # Use a relative future timestamp so this guard is tested regardless
+        # of which day or minute the CI runner executes.
+        pack["issued_at"] = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        pack_path = self.root / "future-pack.json"
+        pack_path.write_text(json.dumps(pack), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "issued_at is in the future"):
+            load_pack(pack_path)
 
     def test_file_hash_and_app_id_supported(self):
         sha = "f" * 64
