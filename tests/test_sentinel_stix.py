@@ -16,10 +16,11 @@ ID_B = "indicator--22222222-2222-4222-8222-222222222222"
 
 
 def indicator(pattern, *, ident=ID_A, **kwargs):
-    return {"type": "indicator", "spec_version": "2.1",
-            "id": ident, "pattern_type": "stix", "pattern_version": "2.1",
-            "pattern": pattern, "valid_from": "2026-01-01T00:00:00Z",
-            **kwargs}
+    result = {"type": "indicator", "spec_version": "2.1",
+              "id": ident, "pattern_type": "stix", "pattern_version": "2.1",
+              "pattern": pattern, "valid_from": "2026-01-01T00:00:00Z"}
+    result.update(kwargs)
+    return result
 
 
 def bundle(*objects):
