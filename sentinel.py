@@ -70,7 +70,7 @@ def _strict_json(raw: bytes, label: str = "Input") -> dict:
                           parse_float=finite_number,
                           parse_int=safe_integer)
     except (ValueError, UnicodeError, RecursionError, OverflowError) as exc:
-        raise ValueError(label + " must be strict, unambiguous UTF-8 JSON") from exc
+        raise ValueError(label + " must be strict UTF-8 JSON (unambiguous)") from exc
     if not isinstance(data, dict):
         raise ValueError(label + " must be a JSON object")
     stack: list[tuple[object, int]] = [(data, 0)]
