@@ -43,6 +43,43 @@ def _read_json(path: Path, limit: int) -> object:
         raise ValueError("Input must contain valid UTF-8 JSON") from exc
 
 
+def _safe_url_hostname(value: str) -> str:
+    """Conservative cross-runtime URL host profile; reject ambiguous authorities.
+
+    Browser URL and Python urlsplit have intentionally different repair rules
+    for percent-encoded hosts, slashes, IP shorthand, Unicode and ports.
+    Restrict signed URL IOCs and observations to stable ASCII DNS authorities.
+    URL text remains exact; this is an authority validation only.
+    """
+    if (not re.match(r"^https?://", value, re.I)
+            or any(ord(ch) < 32 or ord(ch) == 127 or ch.isspace() for ch in value)):
+        raise ValueError("Unsafe URL scheme, whitespace or control character")
+    candidate = re.match(r"^https?://([^/?#]+)", value, re.I)
+    if not candidate:
+        raise ValueError("URL authority required")
+    authority = re.fullmatch(r"([a-zA-Z0-9.-]+)(?::([0-9]{1,5}))?", candidate.group(1))
+    if not authority:
+        raise ValueError("Ambiguous or non-DNS URL authority")
+    host, port = authority.groups()
+    if host.endswith("."):
+        host = host[:-1]
+    if not host or len(host) > 253:
+        raise ValueError("Invalid URL DNS host")
+    labels = host.split(".")
+    if (any(not 0 < len(label) <= 63 or label.startswith("-") or label.endswith("-")
+            for label in labels)
+            or not re.fullmatch(r"[a-zA-Z][a-zA-Z0-9-]*", labels[-1])):
+        raise ValueError("URL host outside stable DNS profile")
+    if port is not None and int(port) > 65535:
+        raise ValueError("Invalid URL port")
+    parsed = urlsplit(value)
+    if (parsed.scheme.lower() not in {"http", "https"} or
+            parsed.username is not None or parsed.password is not None or
+            parsed.hostname is None or parsed.hostname.rstrip(".").lower() != host.lower()):
+        raise ValueError("URL hostname parsing mismatch")
+    return parsed.hostname
+
+
 def _normalize(kind: str, value: str) -> str:
     if not isinstance(value, str) or not value or len(value) > 2048:
         raise ValueError("Invalid indicator value")
@@ -60,11 +97,7 @@ def _normalize(kind: str, value: str) -> str:
             raise ValueError("Invalid domain labels")
         return value
     if kind == "url":
-        parsed = urlsplit(value)
-        if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
-            raise ValueError("Only HTTP(S) URLs without credentials are supported")
-        if any(char.isspace() for char in value):
-            raise ValueError("Whitespace is not supported in URL indicators")
+        _safe_url_hostname(value)
         return value
     if kind == "path":
         value = value.replace("\\", "/")
@@ -255,9 +288,8 @@ def scan_observations(path: Path, metadata: dict, lookup: dict) -> dict:
         report["counts"]["inspected"] += 1
         _record(report, lookup, obs["kind"], obs["value"], {"index": index})
         if obs["kind"] == "url":
-            hostname = urlsplit(obs["value"]).hostname
-            if hostname:
-                _record(report, lookup, "domain", hostname, {"index": index})
+            hostname = _safe_url_hostname(obs["value"].strip())
+            _record(report, lookup, "domain", hostname, {"index": index})
     return _finalize(report)
 
 
