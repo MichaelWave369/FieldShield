@@ -18,7 +18,7 @@ import re
 import stat
 import sys
 
-from sentinel import MAX_PACK_BYTES, load_pack_bytes, scan_files, scan_observations
+from sentinel import MAX_PACK_BYTES, load_pack_bytes, scan_files, scan_observations, _strict_json
 
 try:
     from cryptography.exceptions import InvalidSignature
@@ -71,24 +71,9 @@ def read_snapshot(path: Path, limit: int, *, private: bool = False) -> bytes:
         os.close(fd)
 
 
-def _unique_pairs(items: list[tuple[str, object]]) -> dict:
-    result = {}
-    for key, value in items:
-        if key in result:
-            raise ValueError("Duplicate JSON key")
-        result[key] = value
-    return result
-
-
 def _json(data: bytes, label: str) -> dict:
-    try:
-        value = json.loads(data.decode("utf-8"), object_pairs_hook=_unique_pairs,
-                           parse_constant=lambda _: (_ for _ in ()).throw(ValueError("Non-finite JSON number")))
-    except (UnicodeError, ValueError, RecursionError) as exc:
-        raise ValueError(label + " must be strict UTF-8 JSON") from exc
-    if not isinstance(value, dict):
-        raise ValueError(label + " must be a JSON object")
-    return value
+    """Use the same strict JSON contract for signed manifests and trust roots."""
+    return _strict_json(data, label)
 
 
 def _date(value: object, label: str) -> datetime:

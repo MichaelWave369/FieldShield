@@ -10,6 +10,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -28,6 +29,61 @@ CONFIDENCES = frozenset({"low", "medium", "high"})
 SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
+
+def _strict_json(raw: bytes, label: str = "Input") -> dict:
+    """Strict cross-runtime JSON parse for bounded trust/evidence documents.
+
+    Reject ambiguous duplicate keys (including escaped aliases), nonfinite
+    numbers, precision-losing integers and nesting deeper than PhiOS's limit.
+    This function never echoes raw inputs or confidential property names.
+    """
+    if not isinstance(raw, bytes):
+        raise ValueError(label + " requires UTF-8 bytes")
+
+    def unique(items: list[tuple[str, object]]) -> dict:
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError("Duplicate JSON key")
+            result[key] = value
+        return result
+
+    def finite_number(token: str) -> float:
+        result = float(token)
+        if not math.isfinite(result):
+            raise ValueError("Non-finite JSON number")
+        return result
+
+    def safe_integer(token: str) -> int:
+        result = int(token)
+        if abs(result) > 9_007_199_254_740_991:
+            raise ValueError("JSON integer exceeds shared exactness limit")
+        return result
+
+    def reject_constant(_token: str) -> object:
+        raise ValueError("Nonstandard JSON numeric constant")
+
+    try:
+        data = json.loads(raw.decode("utf-8"),
+                          object_pairs_hook=unique,
+                          parse_constant=reject_constant,
+                          parse_float=finite_number,
+                          parse_int=safe_integer)
+    except (ValueError, UnicodeError, RecursionError, OverflowError) as exc:
+        raise ValueError(label + " must be strict UTF-8 JSON (unambiguous)") from exc
+    if not isinstance(data, dict):
+        raise ValueError(label + " must be a JSON object")
+    stack: list[tuple[object, int]] = [(data, 0)]
+    while stack:
+        item, depth = stack.pop()
+        if depth > 48:
+            raise ValueError(label + " nesting exceeds shared 48-level limit")
+        if isinstance(item, dict):
+            stack.extend((child, depth + 1) for child in item.values())
+        elif isinstance(item, list):
+            stack.extend((child, depth + 1) for child in item)
+    return data
+
 def _read_json(path: Path, limit: int) -> object:
     if path.is_symlink() or not path.is_file():
         raise ValueError("Input must be a regular, non-symlink file")
@@ -37,10 +93,7 @@ def _read_json(path: Path, limit: int) -> object:
         data = handle.read(limit + 1)
     if len(data) > limit:
         raise ValueError("Input exceeds size limit")
-    try:
-        return json.loads(data.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise ValueError("Input must contain valid UTF-8 JSON") from exc
+    return _strict_json(data, "Observation file")
 
 
 def _safe_url_hostname(value: str) -> str:
@@ -123,10 +176,7 @@ def load_pack_bytes(raw: bytes) -> tuple[dict, dict]:
     """Validate exact in-memory bytes so authenticated and parsed data coincide."""
     if not isinstance(raw, bytes) or len(raw) > MAX_PACK_BYTES:
         raise ValueError("Pack exceeds size limit")
-    try:
-        pack = json.loads(raw.decode("utf-8"))
-    except (ValueError, UnicodeError, RecursionError) as exc:
-        raise ValueError("Invalid UTF-8 JSON indicator pack") from exc
+    pack = _strict_json(raw, "IOC pack")
     if not isinstance(pack, dict) or pack.get("schema") != "fieldshield.ioc-pack.v1":
         raise ValueError("Unsupported indicator pack schema")
     source = pack.get("source")
