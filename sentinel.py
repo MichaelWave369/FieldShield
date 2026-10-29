@@ -73,15 +73,26 @@ def _strict_json(raw: bytes, label: str = "Input") -> dict:
         raise ValueError(label + " must be strict UTF-8 JSON (unambiguous)") from exc
     if not isinstance(data, dict):
         raise ValueError(label + " must be a JSON object")
+    def scalar(value: str) -> None:
+        # CPython's json.loads permits isolated \\ud800-\\udfff escapes.
+        # Those aren't Unicode scalar values; JS TextEncoder silently
+        # replaces them with U+FFFD, changing their byte identity.
+        if any(0xD800 <= ord(ch) <= 0xDFFF for ch in value):
+            raise ValueError(label + " contains an unpaired Unicode surrogate")
+
     stack: list[tuple[object, int]] = [(data, 0)]
     while stack:
         item, depth = stack.pop()
         if depth > 48:
             raise ValueError(label + " nesting exceeds shared 48-level limit")
         if isinstance(item, dict):
+            for key in item:
+                scalar(key)
             stack.extend((child, depth + 1) for child in item.values())
         elif isinstance(item, list):
             stack.extend((child, depth + 1) for child in item)
+        elif isinstance(item, str):
+            scalar(item)
     return data
 
 def _read_json(path: Path, limit: int) -> object:
